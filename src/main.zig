@@ -12,7 +12,11 @@ pub fn main() !void {
 
     while (true) {
         const connection = try stream_server.accept();
-        try connection.stream.writer().print("Hello World from Zig Lang", .{});
-        connection.stream.close();
+        try handler(connection.stream);
     }
+}
+
+fn handler(stream: net.Stream) !void {
+    defer stream.close();
+    try stream.writer().print("Hello World from Zig Lang", .{});
 }
