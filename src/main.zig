@@ -56,6 +56,24 @@ const Version = enum {
         if (std.mem.eql(u8, "HTTP/2", s)) return .@"2";
         return ParsingError.VersionNotValid;
     }
+
+    pub fn asString(self: Version) []const u8 {
+        if (self == Version.@"1.1") return "HTTP/1.1";
+        if (self == Version.@"2") return "HTTP/2";
+        unreachable;
+    }
+};
+
+const Status = enum {
+    OK,
+
+    pub fn asString(self: Status) []const u8 {
+        if (self == Status.OK) return "OK";
+    }
+
+    pub fn asNumber(self: Status) usize {
+        if (self == Status.OK) return 200;
+    }
 };
 
 const HTTPContext = struct {
@@ -65,12 +83,25 @@ const HTTPContext = struct {
     headers: std.StringHashMap([]const u8),
     stream: net.Stream,
 
-    pub fn body(self: *HTTPContext) net.Stream.Reader {
+    pub fn bodyReader(self: *HTTPContext) net.Stream.Reader {
         return self.stream.reader();
     }
 
     pub fn response(self: *HTTPContext) net.Stream.Writer {
         return self.stream.writer();
+    }
+
+    pub fn respond(self: *HTTPContext, status: Status, maybe_headers: ?std.StringHashMap([]const u8), body: []const u8) !void {
+        var writer = self.response();
+        try writer.print("{s} {} {s}\r\n", .{ self.version.asString(), status.asNumber(), status.asString() });
+        if (maybe_headers) |headers| {
+            var headers_iter = headers.iterator();
+            while (headers_iter.next()) |entry| {
+                try writer.print("{s}: {s}\n", .{ entry.key_ptr.*, entry.value_ptr.* });
+            }
+        }
+        try writer.print("\r\n", .{});
+        _ = try writer.write(body);
     }
 
     pub fn printRequestDebug(self: *HTTPContext) void {
@@ -118,4 +149,5 @@ fn handler(allocator: std.mem.Allocator, stream: net.Stream) !void {
     defer stream.close();
     var http_context = try HTTPContext.init(allocator, stream);
     http_context.printRequestDebug();
+    try http_context.respond(Status.OK, null, "Hello from ZIG");
 }
